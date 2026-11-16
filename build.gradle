@@ -1,0 +1,38 @@
+import java.time.LocalDate
+
+plugins {
+    id 'java'
+}
+
+group = 'org.example'
+version = '1.0-SNAPSHOT'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+def buildInfoFile = layout.buildDirectory.file('build-info.txt')
+def buildVersion = version.toString()
+
+tasks.register('generateBuildInfo') {
+    description = 'Writes the project version and build date to build-info.txt.'
+    inputs.property('version', buildVersion)
+    outputs.file(buildInfoFile)
+    outputs.upToDateWhen { false }
+
+    doLast {
+        File file = buildInfoFile.get().asFile
+        file.parentFile.mkdirs()
+        file.setText("Version: ${buildVersion}\nBuild date: ${LocalDate.now()}\n", 'UTF-8')
+    }
+}
+
+tasks.named('build') {
+    dependsOn(tasks.named('generateBuildInfo'))
+}
