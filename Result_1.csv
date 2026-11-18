@@ -1,0 +1,8 @@
+Seq Scan on transactions  (cost=0.00..3084.00 rows=1 width=37) (actual time=0.029..7.147 rows=1.00 loops=1)
+  Filter: ((transaction_date >= '2026-07-01 00:00:00'::timestamp without time zone) AND (transaction_date < '2026-08-01 00:00:00'::timestamp without time zone) AND (account_id = 1) AND (amount = 150.0000) AND ((type)::text = 'DEPOSIT'::text))
+  Rows Removed by Filter: 99999
+  Buffers: shared hit=834
+Planning:
+  Buffers: shared hit=83
+Planning Time: 2.508 ms
+Execution Time: 7.175 ms

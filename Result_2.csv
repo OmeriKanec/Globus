@@ -1,0 +1,8 @@
+Index Scan using idx_transactions_account_date on transactions  (cost=0.42..8.45 rows=1 width=37) (actual time=0.069..0.069 rows=1.00 loops=1)
+  Index Cond: ((account_id = 1) AND (amount = 150.0000) AND ((type)::text = 'DEPOSIT'::text) AND (transaction_date >= '2026-07-01 00:00:00'::timestamp without time zone) AND (transaction_date < '2026-08-01 00:00:00'::timestamp without time zone))
+  Index Searches: 1
+  Buffers: shared hit=4 read=3
+Planning:
+  Buffers: shared hit=50 read=1
+Planning Time: 1.856 ms
+Execution Time: 0.086 ms
