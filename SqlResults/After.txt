@@ -1,0 +1,126 @@
+=== Начало загрузки через JOIN FETCH ===
+Hibernate:
+    select
+        distinct c1_0.id,
+        a1_0.client_id,
+        a1_0.id,
+        a1_0.account_number,
+        a1_0.balance,
+        c1_0.email,
+        c1_0.name
+    from
+        clients c1_0
+    left join
+        accounts a1_0
+            on c1_0.id=a1_0.client_id
+    order by
+        c1_0.id
+Test Client 1, счетов: 14
+Test Client 2, счетов: 10
+Test Client 3, счетов: 10
+Test Client 4, счетов: 10
+Test Client 5, счетов: 10
+Test Client 6, счетов: 10
+Test Client 7, счетов: 10
+Test Client 8, счетов: 10
+Test Client 9, счетов: 10
+Test Client 10, счетов: 10
+Test Client 11, счетов: 10
+Test Client 12, счетов: 10
+Test Client 13, счетов: 10
+Test Client 14, счетов: 10
+Test Client 15, счетов: 10
+Test Client 16, счетов: 10
+Test Client 17, счетов: 10
+Test Client 18, счетов: 10
+Test Client 19, счетов: 10
+Test Client 20, счетов: 10
+Test Client 21, счетов: 10
+Test Client 22, счетов: 10
+Test Client 23, счетов: 10
+Test Client 24, счетов: 10
+Test Client 25, счетов: 10
+Test Client 26, счетов: 10
+Test Client 27, счетов: 10
+Test Client 28, счетов: 10
+Test Client 29, счетов: 10
+Test Client 30, счетов: 10
+Test Client 31, счетов: 10
+Test Client 32, счетов: 10
+Test Client 33, счетов: 10
+Test Client 34, счетов: 10
+Test Client 35, счетов: 10
+Test Client 36, счетов: 10
+Test Client 37, счетов: 10
+Test Client 38, счетов: 10
+Test Client 39, счетов: 10
+Test Client 40, счетов: 10
+Test Client 41, счетов: 10
+Test Client 42, счетов: 10
+Test Client 43, счетов: 10
+Test Client 44, счетов: 10
+Test Client 45, счетов: 10
+Test Client 46, счетов: 10
+Test Client 47, счетов: 10
+Test Client 48, счетов: 10
+Test Client 49, счетов: 10
+Test Client 50, счетов: 10
+Test Client 51, счетов: 10
+Test Client 52, счетов: 10
+Test Client 53, счетов: 10
+Test Client 54, счетов: 10
+Test Client 55, счетов: 10
+Test Client 56, счетов: 10
+Test Client 57, счетов: 10
+Test Client 58, счетов: 10
+Test Client 59, счетов: 10
+Test Client 60, счетов: 10
+Test Client 61, счетов: 10
+Test Client 62, счетов: 10
+Test Client 63, счетов: 10
+Test Client 64, счетов: 10
+Test Client 65, счетов: 10
+Test Client 66, счетов: 10
+Test Client 67, счетов: 10
+Test Client 68, счетов: 10
+Test Client 69, счетов: 10
+Test Client 70, счетов: 10
+Test Client 71, счетов: 10
+Test Client 72, счетов: 10
+Test Client 73, счетов: 10
+Test Client 74, счетов: 10
+Test Client 75, счетов: 10
+Test Client 76, счетов: 10
+Test Client 77, счетов: 10
+Test Client 78, счетов: 10
+Test Client 79, счетов: 10
+Test Client 80, счетов: 10
+Test Client 81, счетов: 10
+Test Client 82, счетов: 10
+Test Client 83, счетов: 10
+Test Client 84, счетов: 10
+Test Client 85, счетов: 10
+Test Client 86, счетов: 10
+Test Client 87, счетов: 10
+Test Client 88, счетов: 10
+Test Client 89, счетов: 10
+Test Client 90, счетов: 10
+Test Client 91, счетов: 10
+Test Client 92, счетов: 10
+Test Client 93, счетов: 10
+Test Client 94, счетов: 10
+Test Client 95, счетов: 10
+Test Client 96, счетов: 10
+Test Client 97, счетов: 10
+Test Client 98, счетов: 10
+Test Client 99, счетов: 10
+Test Client 100, счетов: 10
+Ivan Petrov, счетов: 2
+AAAAAAAAAA, счетов: 0
+AAAAAAAAAA, счетов: 0
+AAAAAAAAAA, счетов: 0
+AAAAAAAAAA, счетов: 0
+Ivan Petrov, счетов: 2
+Ivan Petrov, счетов: 2
+Клиентов: 107
+=== Конец загрузки через JOIN FETCH ===
