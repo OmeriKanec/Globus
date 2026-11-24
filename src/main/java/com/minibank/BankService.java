@@ -1,134 +1,149 @@
 package com.minibank;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
+import jakarta.persistence.EntityTransaction;
+import jakarta.persistence.LockModeType;
+import jakarta.persistence.Persistence;
+import jakarta.persistence.PersistenceException;
+import org.hibernate.JDBCException;
+
 import java.math.BigDecimal;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.util.List;
+import java.util.Map;
 
-public class BankService {
+public class BankService implements AutoCloseable {
 
-    private static final String DB_URL = "jdbc:postgresql://localhost:5432/minibank";
-    private static final String DB_USER = "postgres";
-    private static final String DB_PASSWORD = "3009";
-
-    private final String url;
-    private final String user;
-    private final String password;
+    private final EntityManagerFactory factory;
 
     public BankService() {
-        this(DB_URL, DB_USER, DB_PASSWORD);
+        factory = Persistence.createEntityManagerFactory("minibank");
     }
 
     BankService(String url, String user, String password) {
-        this.url = url;
-        this.user = user;
-        this.password = password;
+        factory = Persistence.createEntityManagerFactory("minibank", Map.of(
+                "jakarta.persistence.jdbc.url", url,
+                "jakarta.persistence.jdbc.user", user,
+                "jakarta.persistence.jdbc.password", password
+        ));
     }
 
     public Client registerClient(String name, String email) {
-        String sql = """
-                INSERT INTO clients (name, email)
-                VALUES (?, ?)
-                RETURNING id, name, email
-                """;
-
-        try (Connection connection = openConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setString(1, name);
-            statement.setString(2, email);
-
-            try (ResultSet result = statement.executeQuery()) {
-                if (!result.next()) {
-                    throw new SQLException("Client insert returned no row");
+        try (EntityManager entityManager = factory.createEntityManager()) {
+            EntityTransaction transaction = entityManager.getTransaction();
+            try {
+                transaction.begin();
+                Client client = new Client();
+                client.setName(name);
+                client.setEmail(email);
+                entityManager.persist(client);
+                transaction.commit();
+                return client;
+            } catch (RuntimeException e) {
+                if (transaction.isActive()) {
+                    transaction.rollback();
                 }
-                return readClient(result);
+                throw e;
             }
-        } catch (SQLException e) {
-            if ("23505".equals(e.getSQLState())) {
-                throw new EmailAlreadyExistsException(email, e);
+        } catch (PersistenceException e) {
+            for (Throwable cause = e; cause != null; cause = cause.getCause()) {
+                if (cause instanceof JDBCException databaseError
+                        && "23505".equals(databaseError.getSQLState())
+                        && emailExists(email)) {
+                    throw new EmailAlreadyExistsException(email, e);
+                }
             }
             throw new IllegalStateException("Failed to register client", e);
         }
     }
 
     public Account openAccount(Long clientId, String accountNumber) {
-
-        getClient(clientId);
-
-        String sql = """
-                INSERT INTO accounts (client_id, account_number)
-                VALUES (?, ?)
-                RETURNING id, client_id, account_number, balance
-                """;
-
-        try (Connection connection = openConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setLong(1, clientId);
-            statement.setString(2, accountNumber);
-
-            try (ResultSet result = statement.executeQuery()) {
-                if (!result.next()) {
-                    throw new SQLException("Account insert returned no row");
+        try (EntityManager entityManager = factory.createEntityManager()) {
+            EntityTransaction transaction = entityManager.getTransaction();
+            try {
+                transaction.begin();
+                Client client = findClient(entityManager, clientId);
+                Account account = new Account();
+                account.setAccountNumber(accountNumber);
+                client.addAccount(account);
+                entityManager.persist(account);
+                transaction.commit();
+                return account;
+            } catch (RuntimeException e) {
+                if (transaction.isActive()) {
+                    transaction.rollback();
                 }
-                return readAccount(result);
+                throw e;
             }
-        } catch (SQLException e) {
-            throw new IllegalStateException("Failed to open account", e);
+        }
+    }
+
+    public void removeAccount(Long clientId, Long accountId) {
+        try (EntityManager entityManager = factory.createEntityManager()) {
+            EntityTransaction transaction = entityManager.getTransaction();
+            try {
+                transaction.begin();
+                Client client = findClient(entityManager, clientId);
+                Account account = findAccount(entityManager, accountId, LockModeType.PESSIMISTIC_WRITE);
+                if (!client.getId().equals(account.getClient().getId())) {
+                    throw new IllegalArgumentException("Счёт не принадлежит указанному клиенту");
+                }
+                client.removeAccount(account);
+                transaction.commit();
+            } catch (RuntimeException e) {
+                if (transaction.isActive()) {
+                    transaction.rollback();
+                }
+                throw e;
+            }
         }
     }
 
     public Account getAccount(Long accountId) {
-        String sql = """
-                SELECT id, client_id, account_number, balance
-                FROM accounts
-                WHERE id = ?
-                """;
-
-        try (Connection connection = openConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setObject(1, accountId);
-
-            try (ResultSet result = statement.executeQuery()) {
-                if (!result.next()) {
-                    throw new AccountNotFoundException(accountId);
-                }
-                return readAccount(result);
-            }
-        } catch (SQLException e) {
-            throw new IllegalStateException("Failed to get account", e);
+        try (EntityManager entityManager = factory.createEntityManager()) {
+            return findAccount(entityManager, accountId, LockModeType.NONE);
         }
     }
 
     public Client getClient(Long clientId) {
-        String sql = """
-                SELECT id, name, email
-                FROM clients
-                WHERE id = ?
-                """;
+        try (EntityManager entityManager = factory.createEntityManager()) {
+            return findClient(entityManager, clientId);
+        }
+    }
 
-        try (Connection connection = openConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setObject(1, clientId);
+    public List<Client> getClients() {
+        try (EntityManager entityManager = factory.createEntityManager()) {
+            return entityManager.createQuery(
+                    "select c from Client c order by c.id",
+                    Client.class
+            ).getResultList();
+        }
+    }
 
-            try (ResultSet result = statement.executeQuery()) {
-                if (!result.next()) {
-                    throw new ClientNotFoundException(clientId);
-                }
-                return readClient(result);
-            }
-        } catch (SQLException e) {
-            throw new IllegalStateException("Failed to get client", e);
+    public List<Client> getClientsWithAccounts() {
+        try (EntityManager entityManager = factory.createEntityManager()) {
+            return entityManager.createQuery(
+                    "select distinct c from Client c left join fetch c.accounts order by c.id",
+                    Client.class
+            ).getResultList();
         }
     }
 
     public void deposit(Long accountId, BigDecimal amount) {
-        try (Connection connection = openConnection()) {
-            creditAccount(connection, accountId, amount);
-            recordTransaction(connection, accountId, amount, "DEPOSIT");
-        } catch (SQLException e) {
-            throw new IllegalStateException("Failed to deposit money", e);
+        try (EntityManager entityManager = factory.createEntityManager()) {
+            EntityTransaction transaction = entityManager.getTransaction();
+            try {
+                transaction.begin();
+                Account account = findAccount(entityManager, accountId, LockModeType.PESSIMISTIC_WRITE);
+                account.setBalance(account.getBalance().add(amount));
+                recordTransaction(entityManager, account, amount, "DEPOSIT");
+                transaction.commit();
+            } catch (RuntimeException e) {
+                if (transaction.isActive()) {
+                    transaction.rollback();
+                }
+                throw e;
+            }
         }
     }
 
@@ -137,82 +152,86 @@ public class BankService {
             throw new IllegalArgumentException("Сумма должна быть больше 0");
         }
 
-        try (Connection connection = openConnection()) {
-            debitAccount(connection, fromAccountId, amount);
-            recordTransaction(connection, fromAccountId, amount.negate(), "TRANSFER_OUT");
-
-
-            creditAccount(connection, toAccountId, amount);
-            recordTransaction(connection, toAccountId, amount, "TRANSFER_IN");
-        } catch (SQLException e) {
-            throw new IllegalStateException("Failed to transfer money", e);
+        try (EntityManager entityManager = factory.createEntityManager()) {
+            EntityTransaction transaction = entityManager.getTransaction();
+            try {
+                transaction.begin();
+                Account from = findAccount(entityManager, fromAccountId, LockModeType.PESSIMISTIC_WRITE);
+                if (from.getBalance().compareTo(amount) < 0) {
+                    throw new InsufficientFundsException(fromAccountId);
+                }
+                from.setBalance(from.getBalance().subtract(amount));
+                recordTransaction(entityManager, from, amount.negate(), "TRANSFER_OUT");
+                transaction.commit();
+            } catch (RuntimeException e) {
+                if (transaction.isActive()) {
+                    transaction.rollback();
+                }
+                throw e;
+            }
         }
-    }
 
-    private Connection openConnection() throws SQLException {
-        return DriverManager.getConnection(url, user, password);
-    }
-
-    private void debitAccount(Connection connection, Long accountId, BigDecimal amount)
-            throws SQLException {
-        String sql = """
-                UPDATE accounts
-                SET balance = balance - ?
-                WHERE id = ? AND balance >= ?
-                """;
-
-        try (PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setBigDecimal(1, amount);
-            statement.setObject(2, accountId);
-            statement.setBigDecimal(3, amount);
-
-            if (statement.executeUpdate() == 0) {
-                getAccount(accountId);
-                throw new InsufficientFundsException(accountId);
+        try (EntityManager entityManager = factory.createEntityManager()) {
+            EntityTransaction transaction = entityManager.getTransaction();
+            try {
+                transaction.begin();
+                Account to = findAccount(entityManager, toAccountId, LockModeType.PESSIMISTIC_WRITE);
+                to.setBalance(to.getBalance().add(amount));
+                recordTransaction(entityManager, to, amount, "TRANSFER_IN");
+                transaction.commit();
+            } catch (RuntimeException e) {
+                if (transaction.isActive()) {
+                    transaction.rollback();
+                }
+                throw e;
             }
         }
     }
 
-    private void creditAccount(Connection connection, Long accountId, BigDecimal amount)
-            throws SQLException {
-        String sql = """
-                UPDATE accounts
-                SET balance = balance + ?
-                WHERE id = ?
-                """;
-
-        try (PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setBigDecimal(1, amount);
-            statement.setObject(2, accountId);
-
-            if (statement.executeUpdate() == 0) {
-                throw new AccountNotFoundException(accountId);
-            }
+    private boolean emailExists(String email) {
+        // После ошибки INSERT проверяем email через новый EntityManager:
+        // предыдущая транзакция уже откатилась, а её контекст закрыт.
+        try (EntityManager entityManager = factory.createEntityManager()) {
+            return !entityManager.createQuery(
+                    "select c.id from Client c where c.email = :email",
+                    Long.class
+            ).setParameter("email", email)
+                    .setMaxResults(1)
+                    .getResultList()
+                    .isEmpty();
         }
     }
 
-    private void recordTransaction(Connection connection, Long accountId,
-                                   BigDecimal amount, String type) throws SQLException {
-        String sql = """
-                INSERT INTO transactions (account_id, amount, type)
-                VALUES (?, ?, ?)
-                """;
-
-        try (PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setObject(1, accountId);
-            statement.setBigDecimal(2, amount);
-            statement.setString(3, type);
-            statement.executeUpdate();
+    private Client findClient(EntityManager entityManager, Long clientId) {
+        Client client = clientId == null ? null : entityManager.find(Client.class, clientId);
+        if (client == null) {
+            throw new ClientNotFoundException(clientId);
         }
+        return client;
     }
 
-    private Client readClient(ResultSet result) throws SQLException {
-        return new Client(result.getLong("id"), result.getString("name"),
-                result.getString("email"));
+    private Account findAccount(EntityManager entityManager, Long accountId, LockModeType lockMode) {
+        Account account = accountId == null
+                ? null : entityManager.find(Account.class, accountId, lockMode);
+        if (account == null) {
+            throw new AccountNotFoundException(accountId);
+        }
+        return account;
     }
 
-    private Account readAccount(ResultSet result) throws SQLException {
-        return new Account(result.getLong("id"), result.getLong("client_id"),
-                result.getString("account_number"), result.getBigDecimal("balance"));
+    private void recordTransaction(EntityManager entityManager, Account account,
+                                   BigDecimal amount, String type) {
+        Transaction transaction = new Transaction();
+        transaction.setAccount(account);
+        transaction.setAmount(amount);
+        transaction.setType(type);
+        entityManager.persist(transaction);
+    }
+
+    @Override
+    public void close() {
+        if (factory.isOpen()) {
+            factory.close();
+        }
     }
 }

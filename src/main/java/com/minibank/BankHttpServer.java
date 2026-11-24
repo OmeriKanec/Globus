@@ -19,9 +19,21 @@ public class BankHttpServer {
             .create();
 
     public static void main(String[] args) throws IOException {
-        HttpServer server = createServer(new BankService(), 8080);
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> server.stop(0)));
-        server.start();
+        BankService bank = new BankService();
+        try {
+            HttpServer server = createServer(bank, 8080);
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                try {
+                    server.stop(0);
+                } finally {
+                    bank.close();
+                }
+            }));
+            server.start();
+        } catch (IOException | RuntimeException e) {
+            bank.close();
+            throw e;
+        }
 
         System.out.println("MiniBank запущен на http://127.0.0.1:8080");
         System.out.println("Перевод: POST http://127.0.0.1:8080/transfer");
@@ -73,7 +85,8 @@ public class BankHttpServer {
                 }
 
                 Client client = bank.registerClient(request.name(), request.email());
-                sendResponse(exchange, 200, GSON.toJson(client), "application/json; charset=UTF-8");
+                ClientResponse response = new ClientResponse(client.getId(), client.getName(), client.getEmail());
+                sendResponse(exchange, 200, GSON.toJson(response), "application/json; charset=UTF-8");
             } catch (RuntimeException e) {
                 sendError(exchange, e);
             }
@@ -94,7 +107,9 @@ public class BankHttpServer {
                 }
 
                 Account account = bank.openAccount(request.clientId(), request.accountNumber());
-                sendResponse(exchange, 200, GSON.toJson(account), "application/json; charset=UTF-8");
+                AccountResponse response = new AccountResponse(account.getId(), account.getClient().getId(),
+                        account.getAccountNumber(), account.getBalance());
+                sendResponse(exchange, 200, GSON.toJson(response), "application/json; charset=UTF-8");
             } catch (RuntimeException e) {
                 sendError(exchange, e);
             }
@@ -154,6 +169,12 @@ public class BankHttpServer {
         }
         exchange.sendResponseHeaders(code, body.length);
         exchange.getResponseBody().write(body);
+    }
+
+    private record ClientResponse(Long id, String name, String email) {
+    }
+
+    private record AccountResponse(Long id, Long clientId, String accountNumber, BigDecimal balance) {
     }
 
     private record TransferRequest(Long fromAccountId, Long toAccountId, BigDecimal amount) {
